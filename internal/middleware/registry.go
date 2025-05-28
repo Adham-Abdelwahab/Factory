@@ -1,12 +1,11 @@
 package middleware
 
 import (
+	"Factory/api"
+	"Factory/internal/util"
 	"errors"
 	"fmt"
 	"net/http"
-
-	"Factory/api"
-	"Factory/internal/util"
 )
 
 func Registry(next http.Handler) http.Handler {
@@ -15,8 +14,9 @@ func Registry(next http.Handler) http.Handler {
 		var resource = r.URL.Query().Get("resource")
 		var err error
 
-		if resource == "" {
-			err = errors.New("resource does not exist")
+		fields := []string{"resource", "notresource"}
+		err = util.ValidateParameters(r, util.Query, fields)
+		if err != nil {
 			log.Error(err)
 			api.RequestErrorHandler(w, err)
 			return

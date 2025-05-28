@@ -21,7 +21,7 @@ func GetResource(w http.ResponseWriter, r *http.Request) {
 	err = d.Decode(&req, r.URL.Query())
 	if err != nil {
 		log.Error(err)
-		api.InternalErrorHandler(w)
+		api.RequestErrorHandler(w, err)
 		return
 	}
 
