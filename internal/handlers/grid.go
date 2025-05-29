@@ -5,4 +5,7 @@ import (
 )
 
 func GridHandler(r *chi.Mux) {
+	r.Route("/grid", func(r chi.Router) {
+
+	})
 }

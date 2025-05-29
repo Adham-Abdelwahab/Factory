@@ -7,18 +7,14 @@ import (
 	"Factory/api"
 	"Factory/api/resources"
 	"Factory/internal/util"
-
-	"github.com/gorilla/schema"
 )
 
 func GetResource(w http.ResponseWriter, r *http.Request) {
 	var log = util.GetLogger(r)
 	var err error
 
-	var req = resources.ResourceRequest{}
-	var d = schema.NewDecoder()
-
-	err = d.Decode(&req, r.URL.Query())
+	var req = resources.GetResourceRequest{}
+	err = util.SafeDecode(&req, r)
 	if err != nil {
 		log.Error(err)
 		api.RequestErrorHandler(w, err)

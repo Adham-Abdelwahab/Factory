@@ -8,9 +8,10 @@ import (
 )
 
 func ResourceHandler(r *chi.Mux) {
-	r.Route("/resource", func(r chi.Router) {
+	r.Group(func(r chi.Router) {
 		r.Use(middleware.Registry)
 
-		r.Get("/res", resources.GetResource)
+		r.Get("/resource", resources.GetResource)
+		r.Post("/resource", resources.GetResource)
 	})
 }
