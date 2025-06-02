@@ -13,6 +13,7 @@ type Error struct {
 
 func raise(w http.ResponseWriter, code int, message string) {
 	id := w.Header().Get("X-Correlation-ID")
+	w.WriteHeader(code)
 	resp := Error{
 		Id:      id,
 		Code:    code,
@@ -20,8 +21,6 @@ func raise(w http.ResponseWriter, code int, message string) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(code)
-
 	json.NewEncoder(w).Encode(resp)
 }
 
