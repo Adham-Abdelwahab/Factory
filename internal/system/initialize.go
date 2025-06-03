@@ -48,16 +48,17 @@ func loadMethods(e endpoint) route {
 	stmt := "SELECT * FROM method WHERE id = $1"
 	if rows, err := db.Query(stmt, e.methods); err == nil {
 		uriParams := loadParameters(e.uriParams)
-		properties := loadProperties(uriParams)
 
 		_ = db.ForEach(rows, &method, func() error {
+			properties := make(map[int]map[string]string)
 			methods = append(methods, method)
 
 			headers := loadParameters(method.headers)
 			query := loadParameters(method.parameters)
 
-			properties = append(properties, loadProperties(headers)...)
-			properties = append(properties, loadProperties(query)...)
+			loadProperties(properties, uriParams)
+			loadProperties(properties, headers)
+			loadProperties(properties, query)
 
 			validations[method.method] = validation{
 				properties,
@@ -93,9 +94,7 @@ func loadParameters(id int) []parameter {
 	return parameters
 }
 
-func loadProperties(parameters []parameter) []property {
-	var properties []property
-	var property property
+func loadProperties(props map[int]map[string]string, parameters []parameter) {
 	var db = util.Database
 
 	stmt := "SELECT * FROM property WHERE id = $1"
@@ -104,15 +103,18 @@ func loadProperties(parameters []parameter) []property {
 			continue
 		}
 
+		var properties map[string]string
+		var property property
+
 		if rows, err := db.Query(stmt, parameter.properties); err == nil {
 			_ = db.ForEach(rows, &property, func() error {
-				properties = append(properties, property)
+				properties[property.key] = property.value
 				return nil
 			})
 		} else {
 			logrus.Fatalf("failed to load properties with id %v\n", parameter.properties)
 		}
-	}
 
-	return properties
+		props[parameter.properties] = properties
+	}
 }
