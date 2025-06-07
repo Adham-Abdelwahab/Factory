@@ -93,7 +93,7 @@ func (validation validation) validateParameters(entries entries, parameters []pa
 func validate(props map[string]string, p parameter, v string) error {
 	var message = func(s string) error {
 		prefix := " (" + p.name + ":" + v + ") "
-		m := "failed to convert" + prefix + "to" + s
+		m := "failed to convert" + prefix + "to " + s
 		return errors.New(m)
 	}
 

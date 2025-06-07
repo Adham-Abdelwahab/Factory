@@ -1,6 +1,9 @@
 package system
 
 import (
+	"slices"
+	"strings"
+
 	"Factory/internal/util"
 
 	"github.com/go-chi/chi"
@@ -13,32 +16,40 @@ type route struct {
 	validator validator
 }
 
+var registry []route
+
 func Initialize(r *chi.Mux) {
-	registry := endpoints()
-	catalog(r, registry)
-	system(r, registry)
+	endpoints()
+	catalog(r)
+	system(r)
 }
 
-func endpoints() []route {
+func endpoints() {
 	var db = util.Database
-	var registry []route
 	var endpoint endpoint
 
 	stmt := "SELECT * FROM endpoint"
 	if rows, err := db.Query(stmt); err == nil {
 		_ = db.ForEach(rows, &endpoint, func() error {
-			r := loadMethods(endpoint)
-			registry = append(registry, r)
+			methods, validations := loadMethods(endpoint)
+			registry = append(registry, route{
+				endpoint,
+				methods,
+				validations,
+			})
+
 			return nil
 		})
 	} else {
-		logrus.Fatal("failed to fetch system endpoints")
+		panic("failed to fetch system blueprint")
 	}
 
-	return registry
+	slices.SortFunc(registry, func(a, b route) int {
+		return strings.Compare(b.endpoint.path, a.endpoint.path)
+	})
 }
 
-func loadMethods(e endpoint) route {
+func loadMethods(e endpoint) ([]method, validator) {
 	var db = util.Database
 	var methods []method
 	var method method
@@ -60,7 +71,7 @@ func loadMethods(e endpoint) route {
 			loadProperties(properties, headers)
 			loadProperties(properties, query)
 
-			validations[method.method] = validation{
+			validations[method.name] = validation{
 				properties,
 				uriParams,
 				headers,
@@ -70,10 +81,10 @@ func loadMethods(e endpoint) route {
 			return nil
 		})
 	} else {
-		logrus.Fatal("error retrieving methods for " + e.path)
+		panic("error retrieving methods for " + e.path)
 	}
 
-	return route{e, methods, validations}
+	return methods, validations
 }
 
 func loadParameters(id int) []parameter {
@@ -108,7 +119,7 @@ func loadProperties(props map[int]map[string]string, parameters []parameter) {
 
 		if rows, err := db.Query(stmt, parameter.properties); err == nil {
 			_ = db.ForEach(rows, &property, func() error {
-				properties[property.key] = property.value
+				properties[property.name] = property.value
 				return nil
 			})
 		} else {

@@ -9,7 +9,7 @@ type endpoint struct {
 
 type method struct {
 	id         int
-	method     string
+	name       string
 	parameters int
 	headers    int
 }
@@ -24,6 +24,6 @@ type parameter struct {
 
 type property struct {
 	id    int
-	key   string
+	name  string
 	value string
 }

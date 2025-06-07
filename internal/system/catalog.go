@@ -9,15 +9,15 @@ import (
 	"github.com/go-chi/chi"
 )
 
-func catalog(r *chi.Mux, registry []route) {
+func catalog(r *chi.Mux) {
 	for _, route := range registry {
 		r.Route(route.endpoint.path, func(r chi.Router) {
 			r.Use(route.validator.validationHandler)
 
 			var methods []string
 			for _, method := range route.methods {
-				methods = append(methods, method.method)
-				switch method.method {
+				methods = append(methods, method.name)
+				switch method.name {
 				case "GET":
 					r.Get("/", rest.Get)
 				case "POST":
