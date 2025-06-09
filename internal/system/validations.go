@@ -14,22 +14,12 @@ import (
 	"github.com/go-chi/chi"
 )
 
-/* Parameter Validation */
-type validation struct {
-	properties map[int]map[string]string
-	uriParams  []parameter
-	headers    []parameter
-	query      []parameter
-}
-
-/* Method --> Validation */
-type validator map[string]validation
 type entries map[string]string
 type resolver func(string) string
 
-func (v validator) validationHandler(next http.Handler) http.Handler {
+func (e _endpoint) validationHandler(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if entries, err := validateRequest(r, v[r.Method]); err != nil {
+		if entries, err := e.validateRequest(r); err != nil {
 			util.GetLogger(r).Error(err.Error())
 			api.RequestErrorHandler(w, err)
 		} else {
@@ -39,40 +29,52 @@ func (v validator) validationHandler(next http.Handler) http.Handler {
 	})
 }
 
-func validateRequest(r *http.Request, v validation) (entries, error) {
+func (e _endpoint) validateRequest(r *http.Request) (entries, error) {
 	var entries = make(entries)
+	var method = _method{query: -1, headers: -1}
 
-	var uriParams = func(s string) string { return chi.URLParam(r, s) }
-	if err := v.validateParameters(entries, v.uriParams, uriParams); err != nil {
-		return nil, errors.New("uri parameters: " + err.Error())
+	if m, ok := registry.methods[e.id]; ok {
+		method = m[r.Method]
 	}
 
-	if err := v.validateParameters(entries, v.headers, r.Header.Get); err != nil {
-		return nil, errors.New("headers: " + err.Error())
+	var withPrefix = func(prefix string, err error) error {
+		return errors.New(prefix + ": " + err.Error())
 	}
 
-	if err := v.validateParameters(entries, v.query, r.URL.Query().Get); err != nil {
-		return nil, errors.New("query parameters: " + err.Error())
+	var uriResolver = func(s string) string { return chi.URLParam(r, s) }
+	if err := entries.validateParameters(uriResolver, e.uriParams); err != nil {
+		return nil, withPrefix("uri query", err)
+	}
+
+	if err := entries.validateParameters(r.Header.Get, method.headers); err != nil {
+		return nil, withPrefix("headers", err)
+	}
+
+	if err := entries.validateParameters(r.URL.Query().Get, method.query); err != nil {
+		return nil, withPrefix("query query", err)
 	}
 
 	return entries, nil
 }
 
-func (validation validation) validateParameters(entries entries, parameters []parameter, get resolver) error {
+func (e entries) validateParameters(get resolver, params int) error {
+	if params == -1 {
+		return nil
+	}
+
 	var missing []string
 	var issues []string
 
-	for _, p := range parameters {
-		if v := get(p.name); v == "" {
+	for name, p := range registry.parameters[params] {
+		if v := get(name); v == "" {
 			if p.required {
-				missing = append(missing, p.name)
+				missing = append(missing, name)
 			}
 		} else {
-			props := validation.properties[p.properties]
-			if err := validate(props, p, v); err != nil {
+			if err := validate(p, v); err != nil {
 				issues = append(issues, err.Error())
 			} else {
-				entries[strings.ToLower(p.name)] = v
+				e[name] = v
 			}
 		}
 	}
@@ -90,7 +92,9 @@ func (validation validation) validateParameters(entries entries, parameters []pa
 	return nil
 }
 
-func validate(props map[string]string, p parameter, v string) error {
+func validate(p _parameter, v string) error {
+	var props = registry.properties[p.properties]
+
 	var message = func(s string) error {
 		prefix := " (" + p.name + ":" + v + ") "
 		m := "failed to convert" + prefix + "to " + s
@@ -100,7 +104,7 @@ func validate(props map[string]string, p parameter, v string) error {
 	if enum, ok := props["enum"]; ok {
 		values := strings.Split(enum, ",")
 		if contains := slices.Contains(values, v); !contains {
-			return errors.New(v + " must be value " + enum)
+			return errors.New(v + " must be in (" + enum + ")")
 		}
 	}
 
@@ -108,21 +112,23 @@ func validate(props map[string]string, p parameter, v string) error {
 
 	case "array":
 		if items, ok := props["items"]; !ok {
-			message := "array property 'items' not defined for "
+			message := "array _property 'items' not defined for "
 			return errors.New(message + p.name)
 		} else {
 			p.typ = items
-			var issues []string
-			values := strings.Split(v, ",")
-			for _, v := range values {
-				if err := validate(props, p, v); err != nil {
-					issues = append(issues, err.Error())
-				}
+		}
+
+		var issues []string
+		values := strings.Split(v, ",")
+		for _, v := range values {
+			if err := validate(p, v); err != nil {
+				issues = append(issues, err.Error())
 			}
-			if len(issues) != 0 {
-				message := strings.Join(issues, ". ")
-				return errors.New(message)
-			}
+		}
+
+		if len(issues) != 0 {
+			message := strings.Join(issues, ". ")
+			return errors.New(message)
 		}
 
 	case "integer":

@@ -13,147 +13,187 @@ import (
 	"github.com/go-chi/chi"
 )
 
-func getId(name string, w http.ResponseWriter, r *http.Request) (int, bool) {
-	if id, err := strconv.Atoi(chi.URLParam(r, name)); err != nil {
-		err = errors.New("uri value {" + name + "} must be a number")
+func isId(w http.ResponseWriter, r *http.Request, id *int, value string) bool {
+	if number, err := strconv.Atoi(value); err != nil {
+		message := " is not a valid id"
+		err = errors.New(value + message)
 		util.GetLogger(r).Error(err)
 		api.RequestErrorHandler(w, err)
-		return -1, true
+		return false
 	} else {
-		return id, false
+		*id = number
+		return true
 	}
 }
 
-func GetSystemEndpoints(w http.ResponseWriter, r *http.Request) {
-	var endpoints = make(map[int]string)
-	var basePath = r.URL.Query().Get("basePath")
+func notFound(w http.ResponseWriter, r *http.Request, args ...string) {
+	err := errors.New(strings.Join(args, " "))
+	util.GetLogger(r).Error(err)
+	api.NotFoundErrorHandler(w, err)
+}
 
-	for _, e := range registry {
-		if strings.HasPrefix(e.endpoint.path, basePath) {
-			endpoints[e.endpoint.id] = e.endpoint.path
+func GetSystemEndpoints(w http.ResponseWriter, r *http.Request) {
+	var base = r.URL.Query().Get("basePath")
+	var endpoints = make(map[string]int)
+
+	for i, e := range registry.endpoints {
+		if strings.HasPrefix(e.path, base) {
+			endpoints[e.path] = i
 		}
 	}
 
 	json.NewEncoder(w).Encode(endpoints)
 }
 
-/*
-Must index registry by endpoint.id
-
-Must display endpoint methods and parameters
-*/
 func GetSystemEndpointById(w http.ResponseWriter, r *http.Request) {
-	id, err := getId("endpoint", w, r)
-	if err {
+	var endpoint = chi.URLParam(r, "endpoint")
+
+	var id int
+	if !isId(w, r, &id, endpoint) {
 		return
 	}
 
-	type displayParameters map[string]any
-	type displayMethod struct {
-		Id        int
-		Name      string
-		UriParams displayParameters `json:",omitempty"`
-		Headers   displayParameters `json:",omitempty"`
-		Query     displayParameters `json:",omitempty"`
-	}
-
-	var displayParams = func(params []parameter) map[string]any {
-		toDisplay := make(map[string]any)
-		var required []string
-
-		for _, p := range params {
-			toDisplay[p.name] = p.typ
-			if p.required {
-				required = append(required, p.name)
-			}
-		}
-
-		if len(required) != 0 {
-			toDisplay["required"] = required
-		}
-
-		return toDisplay
-	}
-
-	var methods []displayMethod
-	for _, endpoint := range registry {
-		if endpoint.endpoint.id == id {
-			for _, m := range endpoint.methods {
-				v := endpoint.validator[m.name]
-				methods = append(methods, displayMethod{
-					Id:        m.id,
-					Name:      m.name,
-					UriParams: displayParams(v.uriParams),
-					Headers:   displayParams(v.headers),
-					Query:     displayParams(v.query),
-				})
-			}
-			break
-		}
-	}
-
-	json.NewEncoder(w).Encode(methods)
-}
-
-/*
-Must index registry by endpoint.id
-
-Must index endpoint by method
-*/
-func GetSystemMethodById(w http.ResponseWriter, r *http.Request) {
-	method := strings.ToUpper(chi.URLParam(r, "method"))
-	id, err := getId("endpoint", w, r)
-	if err {
+	route, ok := registry.endpoints[id]
+	if !ok {
+		message := "no endpoint found with id "
+		notFound(w, r, message, endpoint)
 		return
 	}
 
-	for _, endpoint := range registry {
-		if endpoint.endpoint.id == id {
-			for _, m := range endpoint.methods {
-				if method == m.name {
-					json.NewEncoder(w).Encode(struct {
-						MethodId  int
-						Method    string
-						UriParams int
-						Headers   int
-						Query     int
-					}{
-						m.id,
-						m.name,
-						endpoint.endpoint.uriParams,
-						m.headers,
-						m.parameters})
-					return
-				}
+	var methods = make(JObject)
+	if ms, ok := registry.methods[route.methods]; ok {
+		for verb, m := range ms {
+			methods[verb] = JObject{
+				"Headers": m.headers,
+				"Query":   m.query,
 			}
 		}
 	}
 
-	message := errors.New(method + " not found for endpoint " + strconv.Itoa(id))
-	util.GetLogger(r).Error(message)
-	api.NotFoundErrorHandler(w, message)
+	json.NewEncoder(w).Encode(struct {
+		Path       string
+		UriParams  int
+		Methods    int
+		Configured JObject
+	}{
+		route.path,
+		route.uriParams,
+		route.methods,
+		methods,
+	})
 }
 
-/* Must store all parameters separately */
+func GetSystemMethod(w http.ResponseWriter, r *http.Request) {
+	var endpoint = chi.URLParam(r, "endpoint")
+	var verb = chi.URLParam(r, "method")
+
+	var id int
+	if !isId(w, r, &id, endpoint) {
+		return
+	}
+
+	route, ok := registry.endpoints[id]
+	if !ok {
+		message := "no endpoint found with id "
+		notFound(w, r, message, endpoint)
+		return
+	}
+
+	methods, ok := registry.methods[route.methods]
+	if !ok {
+		message := "no methods defined for "
+		notFound(w, r, message, route.path)
+		return
+	}
+
+	verb = strings.ToUpper(verb)
+	method, ok := methods[verb]
+	if !ok {
+		message := "not defined for " + route.path
+		notFound(w, r, "method", verb, message)
+		return
+	}
+
+	json.NewEncoder(w).Encode(struct {
+		Id      int
+		Name    string
+		Uri     int
+		Query   int
+		Headers int
+	}{
+		method.id,
+		method.name,
+		route.uriParams,
+		method.query,
+		method.headers,
+	})
+}
+
 func GetSystemParameters(w http.ResponseWriter, r *http.Request) {
+	var display = make(map[int]map[string]string)
 
+	for id, params := range registry.parameters {
+		if display[id] == nil {
+			display[id] = make(map[string]string)
+		}
+
+		for name, p := range params {
+			display[id][name] = p.typ
+		}
+	}
+
+	json.NewEncoder(w).Encode(display)
 }
 
 func GetSystemParameterById(w http.ResponseWriter, r *http.Request) {
-	_, err := getId("parameter", w, r)
-	if err {
+	parameter := chi.URLParam(r, "parameter")
+
+	var id int
+	if !isId(w, r, &id, parameter) {
 		return
 	}
+
+	params, ok := registry.parameters[id]
+	if !ok {
+		message := "no parameter group bears the id"
+		notFound(w, r, message, parameter)
+		return
+	}
+
+	var display = make(map[string]any)
+	for name, p := range params {
+		display[name] = struct {
+			Type       string
+			Required   bool
+			Properties map[string]string
+		}{
+			p.typ,
+			p.required,
+			registry.properties[p.properties],
+		}
+	}
+
+	json.NewEncoder(w).Encode(display)
 }
 
-/* Must store all properties separately */
-func GetSystemProperties(w http.ResponseWriter, r *http.Request) {
-
+func GetSystemProperties(w http.ResponseWriter, _ *http.Request) {
+	json.NewEncoder(w).Encode(registry.properties)
 }
 
 func GetSystemPropertyById(w http.ResponseWriter, r *http.Request) {
-	_, err := getId("property", w, r)
-	if err {
+	property := chi.URLParam(r, "property")
+
+	var id int
+	if !isId(w, r, &id, property) {
 		return
 	}
+
+	props, ok := registry.properties[id]
+	if !ok {
+		message := "no property group possesses id"
+		notFound(w, r, message, property)
+		return
+	}
+
+	json.NewEncoder(w).Encode(props)
 }

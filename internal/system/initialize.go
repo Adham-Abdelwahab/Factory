@@ -1,131 +1,85 @@
 package system
 
 import (
-	"slices"
-	"strings"
-
 	"Factory/internal/util"
-
 	"github.com/go-chi/chi"
-	"github.com/sirupsen/logrus"
 )
 
-type route struct {
-	endpoint  endpoint
-	methods   []method
-	validator validator
+// JObject is a JSON Object
+type JObject map[string]any
+
+// registry stores system metadata in the form of
+// endpoints, methods, parameters, and properties
+type _registry struct {
+	endpoints  map[int]_endpoint             // endpoints  >> [id] --> _endpoint
+	methods    map[int]map[string]_method    // methods 	  >> [id] --> [verb] --> _method
+	parameters map[int]map[string]_parameter // parameters >> [id] --> [name] --> _parameter
+	properties map[int]map[string]string     // properties >> [id] --> map of _property name,value pairs
 }
 
-var registry []route
+var registry = _registry{
+	endpoints:  make(map[int]_endpoint),
+	methods:    make(map[int]map[string]_method),
+	parameters: make(map[int]map[string]_parameter),
+	properties: make(map[int]map[string]string),
+}
 
 func Initialize(r *chi.Mux) {
-	endpoints()
+	loadEndpoints()
+	loadMethods()
+	loadParameters()
+	loadProperties()
+
 	catalog(r)
 	system(r)
 }
 
-func endpoints() {
+func load[T any](table string, processor func(T)) {
 	var db = util.Database
-	var endpoint endpoint
+	var element T
 
-	stmt := "SELECT * FROM endpoint"
+	stmt := "SELECT * FROM " + table
 	if rows, err := db.Query(stmt); err == nil {
-		_ = db.ForEach(rows, &endpoint, func() error {
-			methods, validations := loadMethods(endpoint)
-			registry = append(registry, route{
-				endpoint,
-				methods,
-				validations,
-			})
-
+		defer rows.Close()
+		_ = db.ForEach(rows, &element, func() error {
+			processor(element)
 			return nil
 		})
 	} else {
-		panic("failed to fetch system blueprint")
+		suffix := table + ": " + err.Error()
+		panic("failed to fetch system " + suffix)
 	}
+}
 
-	slices.SortFunc(registry, func(a, b route) int {
-		return strings.Compare(b.endpoint.path, a.endpoint.path)
+func loadEndpoints() {
+	load[_endpoint]("endpoint", func(e _endpoint) {
+		registry.endpoints[e.id] = e
 	})
 }
 
-func loadMethods(e endpoint) ([]method, validator) {
-	var db = util.Database
-	var methods []method
-	var method method
-
-	var validations = make(map[string]validation)
-
-	stmt := "SELECT * FROM method WHERE id = $1"
-	if rows, err := db.Query(stmt, e.methods); err == nil {
-		uriParams := loadParameters(e.uriParams)
-
-		_ = db.ForEach(rows, &method, func() error {
-			properties := make(map[int]map[string]string)
-			methods = append(methods, method)
-
-			headers := loadParameters(method.headers)
-			query := loadParameters(method.parameters)
-
-			loadProperties(properties, uriParams)
-			loadProperties(properties, headers)
-			loadProperties(properties, query)
-
-			validations[method.name] = validation{
-				properties,
-				uriParams,
-				headers,
-				query,
-			}
-
-			return nil
-		})
-	} else {
-		panic("error retrieving methods for " + e.path)
-	}
-
-	return methods, validations
+func loadMethods() {
+	load[_method]("method", func(m _method) {
+		if registry.methods[m.id] == nil {
+			registry.methods[m.id] = make(map[string]_method)
+		}
+		registry.methods[m.id][m.name] = m
+	})
 }
 
-func loadParameters(id int) []parameter {
-	var parameters []parameter
-	var parameter parameter
-	var db = util.Database
-
-	stmt := "SELECT * FROM parameter WHERE id = $1"
-	if rows, err := db.Query(stmt, id); err == nil {
-		_ = db.ForEach(rows, &parameter, func() error {
-			parameters = append(parameters, parameter)
-			return nil
-		})
-	} else {
-		logrus.Fatalf("failed to load parameters with id %v\n", id)
-	}
-
-	return parameters
+func loadParameters() {
+	load[_parameter]("parameter", func(p _parameter) {
+		if registry.parameters[p.id] == nil {
+			registry.parameters[p.id] = make(map[string]_parameter)
+		}
+		registry.parameters[p.id][p.name] = p
+	})
 }
 
-func loadProperties(props map[int]map[string]string, parameters []parameter) {
-	var db = util.Database
-
-	stmt := "SELECT * FROM property WHERE id = $1"
-	for _, parameter := range parameters {
-		if parameter.properties == -1 {
-			continue
+func loadProperties() {
+	load[_property]("property", func(p _property) {
+		if registry.properties[p.id] == nil {
+			registry.properties[p.id] = make(map[string]string)
 		}
-
-		var properties map[string]string
-		var property property
-
-		if rows, err := db.Query(stmt, parameter.properties); err == nil {
-			_ = db.ForEach(rows, &property, func() error {
-				properties[property.name] = property.value
-				return nil
-			})
-		} else {
-			logrus.Fatalf("failed to load properties with id %v\n", parameter.properties)
-		}
-
-		props[parameter.properties] = properties
-	}
+		registry.properties[p.id][p.name] = p.value
+	})
 }

@@ -1,7 +1,9 @@
 package system
 
 import (
+	"maps"
 	"net/http"
+	"slices"
 	"strings"
 
 	"Factory/internal/system/rest"
@@ -10,14 +12,14 @@ import (
 )
 
 func catalog(r *chi.Mux) {
-	for _, route := range registry {
-		r.Route(route.endpoint.path, func(r chi.Router) {
-			r.Use(route.validator.validationHandler)
+	for _, endpoint := range registry.endpoints {
+		r.Route(endpoint.path, func(r chi.Router) {
+			r.Use(endpoint.validationHandler)
 
-			var methods []string
-			for _, method := range route.methods {
-				methods = append(methods, method.name)
-				switch method.name {
+			verbs := maps.Keys(registry.methods[endpoint.methods])
+			methods := slices.Collect(verbs)
+			for _, verb := range methods {
+				switch verb {
 				case "GET":
 					r.Get("/", rest.Get)
 				case "POST":
@@ -32,8 +34,8 @@ func catalog(r *chi.Mux) {
 			}
 
 			r.Options("/", func(w http.ResponseWriter, _ *http.Request) {
-				methods := strings.Join(methods, ", ")
-				w.Header().Set("Allow", methods)
+				allowed := strings.Join(methods, ", ")
+				w.Header().Set("Allow", allowed)
 				w.WriteHeader(204)
 			})
 		})

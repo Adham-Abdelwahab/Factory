@@ -1,20 +1,20 @@
 package system
 
-type endpoint struct {
+type _endpoint struct {
 	id        int
 	path      string
-	methods   int
 	uriParams int
+	methods   int
 }
 
-type method struct {
-	id         int
-	name       string
-	parameters int
-	headers    int
+type _method struct {
+	id      int
+	name    string
+	query   int
+	headers int
 }
 
-type parameter struct {
+type _parameter struct {
 	id         int
 	name       string
 	typ        string
@@ -22,7 +22,7 @@ type parameter struct {
 	properties int
 }
 
-type property struct {
+type _property struct {
 	id    int
 	name  string
 	value string
