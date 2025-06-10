@@ -34,6 +34,10 @@ func scanner(structure any) []any {
 	pointer := unsafe.Pointer(value.Pointer())
 	fields := reflect.TypeOf(value.Elem().Interface())
 
+	if value.Elem().Kind() != reflect.Struct {
+		return []any{structure}
+	}
+
 	for i := 0; i < fields.NumField(); i++ {
 		field := fields.Field(i)
 		offset := unsafe.Add(pointer, field.Offset)
@@ -61,5 +65,6 @@ func (database *database) ForEach(rows pgx.Rows, scan any, method func() error) 
 }
 
 func (database *database) Close() {
+	database.Ctx.Done()
 	database.Conn.Close()
 }

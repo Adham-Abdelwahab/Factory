@@ -20,7 +20,7 @@ type resolver func(string) string
 func (e _endpoint) validationHandler(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if entries, err := e.validateRequest(r); err != nil {
-			util.GetLogger(r).Error(err.Error())
+			util.GetLogger(r).Error(err)
 			api.RequestErrorHandler(w, err)
 		} else {
 			ctx := context.WithValue(r.Context(), "entries", entries)
@@ -30,12 +30,8 @@ func (e _endpoint) validationHandler(next http.Handler) http.Handler {
 }
 
 func (e _endpoint) validateRequest(r *http.Request) (entries, error) {
+	var method = registry.methods[e.id][r.Method]
 	var entries = make(entries)
-	var method = _method{}
-
-	if m, ok := registry.methods[e.id]; ok {
-		method = m[r.Method]
-	}
 
 	var withPrefix = func(prefix string, err error) error {
 		return errors.New(prefix + ": " + err.Error())
@@ -43,7 +39,7 @@ func (e _endpoint) validateRequest(r *http.Request) (entries, error) {
 
 	var uriResolver = func(s string) string { return chi.URLParam(r, s) }
 	if err := entries.validateParameters(uriResolver, e.uriParams); err != nil {
-		return nil, withPrefix("uri query", err)
+		return nil, withPrefix("uri parameters", err)
 	}
 
 	if err := entries.validateParameters(r.Header.Get, method.headers); err != nil {
@@ -51,7 +47,7 @@ func (e _endpoint) validateRequest(r *http.Request) (entries, error) {
 	}
 
 	if err := entries.validateParameters(r.URL.Query().Get, method.query); err != nil {
-		return nil, withPrefix("query query", err)
+		return nil, withPrefix("query parameters", err)
 	}
 
 	return entries, nil
@@ -95,7 +91,7 @@ func (e entries) validateParameters(get resolver, params int) error {
 func validate(p _parameter, v string) error {
 	var props = registry.properties[p.properties]
 
-	var message = func(s string) error {
+	var conversion = func(s string) error {
 		prefix := " (" + p.name + ":" + v + ") "
 		m := "failed to convert" + prefix + "to " + s
 		return errors.New(m)
@@ -103,8 +99,10 @@ func validate(p _parameter, v string) error {
 
 	if enum, ok := props["enum"]; ok {
 		values := strings.Split(enum, ",")
-		if contains := slices.Contains(values, v); !contains {
-			return errors.New(v + " must be in (" + enum + ")")
+		if !slices.Contains(values, v) {
+			prefix := p.name + " (" + v + ") "
+			suffix := "must be in (" + enum + ")"
+			return errors.New(prefix + suffix)
 		}
 	}
 
@@ -133,14 +131,14 @@ func validate(p _parameter, v string) error {
 
 	case "integer":
 		if num, err := strconv.Atoi(v); err != nil {
-			return message("int")
+			return conversion("int")
 		} else {
 			return numeric(props, num)
 		}
 
 	case "boolean":
 		if _, err := strconv.ParseBool(v); err != nil {
-			return message("bool")
+			return conversion("bool")
 		}
 	}
 

@@ -13,16 +13,13 @@ import (
 	"github.com/go-chi/chi"
 )
 
-func isId(w http.ResponseWriter, r *http.Request, id *int, value string) bool {
+func isId(value string) (int, error) {
 	if number, err := strconv.Atoi(value); err != nil {
 		message := " is not a valid id"
 		err = errors.New(value + message)
-		util.GetLogger(r).Error(err)
-		api.RequestErrorHandler(w, err)
-		return false
+		return 0, err
 	} else {
-		*id = number
-		return true
+		return number, nil
 	}
 }
 
@@ -48,8 +45,10 @@ func GetSystemEndpoints(w http.ResponseWriter, r *http.Request) {
 func GetSystemEndpointById(w http.ResponseWriter, r *http.Request) {
 	var endpoint = chi.URLParam(r, "endpoint")
 
-	var id int
-	if !isId(w, r, &id, endpoint) {
+	id, err := isId(endpoint)
+	if err != nil {
+		util.GetLogger(r).Error(err)
+		api.RequestErrorHandler(w, err)
 		return
 	}
 
@@ -64,8 +63,8 @@ func GetSystemEndpointById(w http.ResponseWriter, r *http.Request) {
 	if ms, ok := registry.methods[route.methods]; ok {
 		for verb, m := range ms {
 			methods[verb] = struct {
-				Headers int `json:",omitempty"`
-				Query   int `json:",omitempty"`
+				Headers int `json:"headers,omitempty"`
+				Query   int `json:"query,omitempty"`
 			}{
 				m.headers,
 				m.query,
@@ -74,10 +73,10 @@ func GetSystemEndpointById(w http.ResponseWriter, r *http.Request) {
 	}
 
 	json.NewEncoder(w).Encode(struct {
-		Path       string
-		UriParams  int `json:",omitempty"`
-		Methods    int `json:",omitempty"`
-		Configured JObject
+		Path       string  `json:"path"`
+		UriParams  int     `json:"uriParams,omitempty"`
+		Methods    int     `json:"methods,omitempty"`
+		Configured JObject `json:"configured"`
 	}{
 		route.path,
 		route.uriParams,
@@ -90,8 +89,10 @@ func GetSystemMethod(w http.ResponseWriter, r *http.Request) {
 	var endpoint = chi.URLParam(r, "endpoint")
 	var verb = chi.URLParam(r, "method")
 
-	var id int
-	if !isId(w, r, &id, endpoint) {
+	id, err := isId(endpoint)
+	if err != nil {
+		util.GetLogger(r).Error(err)
+		api.RequestErrorHandler(w, err)
 		return
 	}
 
@@ -118,11 +119,11 @@ func GetSystemMethod(w http.ResponseWriter, r *http.Request) {
 	}
 
 	json.NewEncoder(w).Encode(struct {
-		Id      int
-		Name    string
-		Uri     int
-		Query   int
-		Headers int
+		Id      int    `json:"id"`
+		Method  string `json:"method"`
+		Uri     int    `json:"uriParams"`
+		Query   int    `json:"query"`
+		Headers int    `json:"headers"`
 	}{
 		method.id,
 		method.name,
@@ -150,8 +151,10 @@ func GetSystemParameters(w http.ResponseWriter, _ *http.Request) {
 func GetSystemParameterById(w http.ResponseWriter, r *http.Request) {
 	parameter := chi.URLParam(r, "parameter")
 
-	var id int
-	if !isId(w, r, &id, parameter) {
+	id, err := isId(parameter)
+	if err != nil {
+		util.GetLogger(r).Error(err)
+		api.RequestErrorHandler(w, err)
 		return
 	}
 
@@ -163,11 +166,12 @@ func GetSystemParameterById(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var display = make(map[string]any)
+	type props map[string]string
 	for name, p := range params {
 		display[name] = struct {
-			Type       string
-			Required   bool
-			Properties map[string]string `json:",omitempty"`
+			Type       string `json:"type"`
+			Required   bool   `json:"required"`
+			Properties props  `json:"properties,omitempty"`
 		}{
 			p.typ,
 			p.required,
@@ -185,17 +189,17 @@ func GetSystemProperties(w http.ResponseWriter, _ *http.Request) {
 func GetSystemPropertyById(w http.ResponseWriter, r *http.Request) {
 	property := chi.URLParam(r, "property")
 
-	var id int
-	if !isId(w, r, &id, property) {
+	id, err := isId(property)
+	if err != nil {
+		util.GetLogger(r).Error(err)
+		api.RequestErrorHandler(w, err)
 		return
 	}
 
-	props, ok := registry.properties[id]
-	if !ok {
+	if properties, ok := registry.properties[id]; !ok {
 		message := "no property group possesses id"
 		notFound(w, r, message, property)
-		return
+	} else {
+		json.NewEncoder(w).Encode(properties)
 	}
-
-	json.NewEncoder(w).Encode(props)
 }

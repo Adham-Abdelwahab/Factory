@@ -10,9 +10,11 @@ import (
 
 func Correlation(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		id := r.Header.Get("X-Correlation-ID")
-		if id == "" {
-			id = uuid.New().String()
+		var id string
+		if id = r.Header.Get("X-Correlation-ID"); id == "" {
+			if id = r.Header.Get("X-Request-ID"); id == "" {
+				id = uuid.New().String()
+			}
 		}
 
 		w.Header().Set("X-Correlation-ID", id)
