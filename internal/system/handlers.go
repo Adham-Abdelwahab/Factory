@@ -63,17 +63,20 @@ func GetSystemEndpointById(w http.ResponseWriter, r *http.Request) {
 	var methods = make(JObject)
 	if ms, ok := registry.methods[route.methods]; ok {
 		for verb, m := range ms {
-			methods[verb] = JObject{
-				"Headers": m.headers,
-				"Query":   m.query,
+			methods[verb] = struct {
+				Headers int `json:",omitempty"`
+				Query   int `json:",omitempty"`
+			}{
+				m.headers,
+				m.query,
 			}
 		}
 	}
 
 	json.NewEncoder(w).Encode(struct {
 		Path       string
-		UriParams  int
-		Methods    int
+		UriParams  int `json:",omitempty"`
+		Methods    int `json:",omitempty"`
 		Configured JObject
 	}{
 		route.path,
@@ -129,14 +132,13 @@ func GetSystemMethod(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func GetSystemParameters(w http.ResponseWriter, r *http.Request) {
+func GetSystemParameters(w http.ResponseWriter, _ *http.Request) {
 	var display = make(map[int]map[string]string)
 
 	for id, params := range registry.parameters {
 		if display[id] == nil {
 			display[id] = make(map[string]string)
 		}
-
 		for name, p := range params {
 			display[id][name] = p.typ
 		}
@@ -165,7 +167,7 @@ func GetSystemParameterById(w http.ResponseWriter, r *http.Request) {
 		display[name] = struct {
 			Type       string
 			Required   bool
-			Properties map[string]string
+			Properties map[string]string `json:",omitempty"`
 		}{
 			p.typ,
 			p.required,

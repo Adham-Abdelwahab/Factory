@@ -31,7 +31,7 @@ func (e _endpoint) validationHandler(next http.Handler) http.Handler {
 
 func (e _endpoint) validateRequest(r *http.Request) (entries, error) {
 	var entries = make(entries)
-	var method = _method{query: -1, headers: -1}
+	var method = _method{}
 
 	if m, ok := registry.methods[e.id]; ok {
 		method = m[r.Method]
@@ -58,7 +58,7 @@ func (e _endpoint) validateRequest(r *http.Request) (entries, error) {
 }
 
 func (e entries) validateParameters(get resolver, params int) error {
-	if params == -1 {
+	if params == 0 {
 		return nil
 	}
 
