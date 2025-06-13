@@ -21,7 +21,15 @@ func main() {
 	factory.Use(middleware.Correlation)
 	system.Initialize(factory)
 
-	f.Println("Starting the Factory ...")
+	f.Println("Starting the ...")
+	f.Print(`
+		   @@@@@@@@@	   @@@@@@@@@@			 @@@@@@@@@@@@@	@			 @@@@@@@@@@  @@@@@@@@@@@@   @@@@@@@@@@   	@@@@@@@    @@        @@
+	     @@@	 @@@     @@@	   @@@	    	@@			   @@@			@@	  	 	     @@ 	  @@@	    @@@    @@      @@   @@     @@
+	   @@@			    @@@	  	  @@@		   @@			  @@@@@		   @@			    @@		 @@@	   @@@    @@      @@     @@  @@
+	  @@@      @@@@@   @@@		 @@@		  @@@@@@@@		 @@   @@	  @@			   @@		@@@		  @@@    @@ @@@@@         @@
+	  @@@      @@@	  @@@	    @@@		 	 @@			    @@@@@@@@@	 @@		  		  @@	   @@@	     @@@    @@     @@        @@
+       @@@@@@@@		   @@@@@@@@@@		 	@@			   @@@@@@@@@@@	@@@@@@@@@@@	  	 @@			@@@@@@@@@@     @@       @@  	@@
+`)
 
 	if err := http.ListenAndServe("localhost:8080", factory); err != nil {
 		f.Println("Failed to start the factory !!")
