@@ -8,8 +8,8 @@ import (
 	"strconv"
 	"strings"
 
+	"Factory/api"
 	"Factory/internal/util"
-	"Factory/models"
 
 	"github.com/go-chi/chi"
 )
@@ -20,7 +20,7 @@ type resolver func(string) string
 func (e _endpoint) validationHandler(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if entries, err := e.validateRequest(r); err != nil {
-			models.RequestErrorHandler(w, r, err.Error())
+			api.RequestErrorHandler(w, r, err.Error())
 		} else {
 			ctx := context.WithValue(r.Context(), "entries", entries)
 			next.ServeHTTP(w, r.WithContext(ctx))

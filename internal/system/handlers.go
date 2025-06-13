@@ -7,8 +7,8 @@ import (
 	"strconv"
 	"strings"
 
+	"Factory/api"
 	"Factory/internal/util"
-	"Factory/models"
 
 	"github.com/go-chi/chi"
 )
@@ -41,7 +41,7 @@ func GetSystemEndpointById(w http.ResponseWriter, r *http.Request) {
 
 	id, err := isId(endpoint)
 	if err != nil {
-		models.RequestErrorHandler(w, r, err.Error())
+		api.RequestErrorHandler(w, r, err.Error())
 		return
 	}
 
@@ -49,21 +49,21 @@ func GetSystemEndpointById(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		message := "no endpoint found with id %v"
 		message = util.Message(message, id)
-		models.RequestErrorHandler(w, r, message)
+		api.RequestErrorHandler(w, r, message)
 		return
 	}
 
 	var methods = make(JObject)
 	if ms, ok := registry.methods[route.methods]; ok {
 		for verb, m := range ms {
-			methods[verb] = models.GetSystemEndpointsMethod{
+			methods[verb] = api.GetSystemEndpointsMethod{
 				Query:   m.query,
 				Headers: m.headers,
 			}
 		}
 	}
 
-	json.NewEncoder(w).Encode(models.GetSystemEndpoints{
+	json.NewEncoder(w).Encode(api.GetSystemEndpoints{
 		Path:       route.path,
 		UriParams:  route.uriParams,
 		Methods:    route.methods,
@@ -77,7 +77,7 @@ func GetSystemMethod(w http.ResponseWriter, r *http.Request) {
 
 	id, err := isId(endpoint)
 	if err != nil {
-		models.RequestErrorHandler(w, r, err.Error())
+		api.RequestErrorHandler(w, r, err.Error())
 		return
 	}
 
@@ -85,7 +85,7 @@ func GetSystemMethod(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		message := "no endpoint found with id %s"
 		message = util.Message(message, endpoint)
-		models.NotFoundErrorHandler(w, r, message)
+		api.NotFoundErrorHandler(w, r, message)
 		return
 	}
 
@@ -93,7 +93,7 @@ func GetSystemMethod(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		message := "no methods defined for %s"
 		message = util.Message(message, route.path)
-		models.NotFoundErrorHandler(w, r, message)
+		api.NotFoundErrorHandler(w, r, message)
 		return
 	}
 
@@ -102,11 +102,11 @@ func GetSystemMethod(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		message := "not defined for %s"
 		message = util.Message(message, route.path)
-		models.NotFoundErrorHandler(w, r, message)
+		api.NotFoundErrorHandler(w, r, message)
 		return
 	}
 
-	json.NewEncoder(w).Encode(models.GetSystemMethod{
+	json.NewEncoder(w).Encode(api.GetSystemMethod{
 		Id:      method.id,
 		Method:  method.name,
 		Uri:     route.uriParams,
@@ -135,7 +135,7 @@ func GetSystemParameterById(w http.ResponseWriter, r *http.Request) {
 
 	id, err := isId(parameter)
 	if err != nil {
-		models.RequestErrorHandler(w, r, err.Error())
+		api.RequestErrorHandler(w, r, err.Error())
 		return
 	}
 
@@ -143,13 +143,13 @@ func GetSystemParameterById(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		message := "no parameter group bears the id %s"
 		message = util.Message(message, parameter)
-		models.NotFoundErrorHandler(w, r, message)
+		api.NotFoundErrorHandler(w, r, message)
 		return
 	}
 
 	var display = make(map[string]any)
 	for name, p := range params {
-		display[name] = models.GetSystemParametersById{
+		display[name] = api.GetSystemParametersById{
 			Type:       p.typ,
 			Required:   p.required,
 			Properties: registry.properties[p.properties],
@@ -168,14 +168,14 @@ func GetSystemPropertyById(w http.ResponseWriter, r *http.Request) {
 
 	id, err := isId(property)
 	if err != nil {
-		models.RequestErrorHandler(w, r, err.Error())
+		api.RequestErrorHandler(w, r, err.Error())
 		return
 	}
 
 	if properties, ok := registry.properties[id]; !ok {
 		message := "no property group possesses id %s"
 		message = util.Message(message, property)
-		models.NotFoundErrorHandler(w, r, message)
+		api.NotFoundErrorHandler(w, r, message)
 	} else {
 		json.NewEncoder(w).Encode(properties)
 	}
@@ -191,7 +191,7 @@ func PostSystemEndpoint(w http.ResponseWriter, r *http.Request) {
 	endpoint = "/" + endpoint
 	if endpoint == "/" {
 		message := "endpoint path must be provided"
-		models.RequestErrorHandler(w, r, message)
+		api.RequestErrorHandler(w, r, message)
 		return
 	}
 
@@ -199,7 +199,7 @@ func PostSystemEndpoint(w http.ResponseWriter, r *http.Request) {
 		if e.path == endpoint {
 			message := "%s is already registered"
 			message = util.Message(message, e.path)
-			models.RequestErrorHandler(w, r, message)
+			api.RequestErrorHandler(w, r, message)
 			return
 		}
 	}
@@ -218,13 +218,13 @@ func PostSystemEndpoint(w http.ResponseWriter, r *http.Request) {
 
 	message := "Successfully registered endpoint %s"
 	message = util.Message(message, endpoint)
-	models.SuccessfulSystemPost(w, r, message)
+	api.SuccessfulSystemPost(w, r, message)
 }
 
 func PostSystemMethod(w http.ResponseWriter, r *http.Request) {
 	var db = util.Database
 
-	var method models.PostSystemMethodRequest
+	var method api.PostSystemMethodRequest
 	json.NewDecoder(r.Body).Decode(&method)
 
 	method.Name = chi.URLParam(r, "method")
@@ -235,7 +235,7 @@ func PostSystemMethod(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		message := "endpoint id (%s) must be a number"
 		message = util.Message(message, endpoint)
-		models.RequestErrorHandler(w, r, message)
+		api.RequestErrorHandler(w, r, message)
 		return
 	}
 
@@ -243,14 +243,14 @@ func PostSystemMethod(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		message := "endpoint %s does not exist"
 		message = util.Message(message, endpoint)
-		models.RequestErrorHandler(w, r, message)
+		api.RequestErrorHandler(w, r, message)
 		return
 	}
 
 	if _, ok = registry.methods[e.methods][method.Name]; ok {
 		message := "%s is already registered for %s"
 		message = util.Message(message, method.Name, e.path)
-		models.RequestErrorHandler(w, r, message)
+		api.RequestErrorHandler(w, r, message)
 		return
 	}
 
@@ -277,5 +277,5 @@ func PostSystemMethod(w http.ResponseWriter, r *http.Request) {
 
 	message := "Successfully registered method %s for %s"
 	message = util.Message(message, method.Name, e.path)
-	models.SuccessfulSystemPost(w, r, message)
+	api.SuccessfulSystemPost(w, r, message)
 }

@@ -1,4 +1,4 @@
-package models
+package api
 
 import (
 	"Factory/internal/util"
