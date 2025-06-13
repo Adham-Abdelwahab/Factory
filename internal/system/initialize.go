@@ -2,6 +2,7 @@ package system
 
 import (
 	"Factory/internal/util"
+
 	"github.com/go-chi/chi"
 )
 
@@ -12,7 +13,7 @@ type JObject map[string]any
 // endpoints, methods, parameters, and properties
 type _registry struct {
 	endpoints  map[int]_endpoint             // endpoints  >> [id] --> _endpoint
-	methods    map[int]map[string]_method    // methods 	  >> [id] --> [verb] --> _method
+	methods    map[int]map[string]_method    // methods    >> [id] --> [verb] --> _method
 	parameters map[int]map[string]_parameter // parameters >> [id] --> [name] --> _parameter
 	properties map[int]map[string]string     // properties >> [id] --> map of _property name,value pairs
 }
@@ -46,8 +47,8 @@ func load[T any](table string, processor func(T)) {
 			return nil
 		})
 	} else {
-		suffix := table + ": " + err.Error()
-		panic("failed to fetch system " + suffix)
+		message := "failed to fetch %ss from system: %s"
+		panic(util.Message(message, table, err.Error()))
 	}
 }
 

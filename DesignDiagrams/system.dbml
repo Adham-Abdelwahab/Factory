@@ -1,0 +1,53 @@
+// Use DBML to define your database structure
+// Docs: https://dbml.dbdiagram.io/docs
+
+Table endpoint {
+  id serial [pk]
+  path varchar
+  methods integer [unique, ref: < method.id]
+  uriParams integer [unique, ref: < parameter.id]
+}
+
+TablePartial indexed {
+  id serial
+  name varchar
+  indexes {
+    (id, name) [pk]
+    id
+  }
+}
+
+enum methods {
+  GET
+  POST
+  PUT
+  DELETE
+  PATCH
+}
+
+Table method {
+  id serial
+  name methods
+  headers integer [ref: <> parameter.id]
+  query integer [ref: <> parameter.id]
+
+  ~indexed
+}
+
+enum type {
+  integer
+  boolean
+  string
+}
+
+Table parameter {
+  ~indexed
+  type type
+  required bool
+  properties integer [ref: < property.id]
+}
+
+Table property {
+  ~indexed
+  value varchar
+}

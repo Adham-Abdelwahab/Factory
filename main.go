@@ -1,9 +1,8 @@
 package main
 
 import (
-	"fmt"
+	f "fmt"
 	"net/http"
-	"os"
 
 	"Factory/internal/middleware"
 	"Factory/internal/system"
@@ -11,13 +10,9 @@ import (
 
 	"github.com/go-chi/chi"
 	chimiddle "github.com/go-chi/chi/middleware"
-	"github.com/sirupsen/logrus"
 )
 
 func main() {
-	logrus.SetReportCaller(true)
-	logrus.SetOutput(os.Stdout)
-
 	util.InitializeDatabase()
 	defer util.Database.Close()
 
@@ -26,11 +21,9 @@ func main() {
 	factory.Use(middleware.Correlation)
 	system.Initialize(factory)
 
-	fmt.Println("Starting the Factory ...")
+	f.Println("Starting the Factory ...")
 
-	err := http.ListenAndServe("localhost:8080", factory)
-	if err != nil {
-		fmt.Println("Failed to start the factory !")
-		logrus.Error(err)
+	if err := http.ListenAndServe("localhost:8080", factory); err != nil {
+		f.Println("Failed to start the factory !!")
 	}
 }

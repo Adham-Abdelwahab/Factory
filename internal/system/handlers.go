@@ -7,26 +7,20 @@ import (
 	"strconv"
 	"strings"
 
-	"Factory/api"
 	"Factory/internal/util"
+	"Factory/models"
 
 	"github.com/go-chi/chi"
 )
 
 func isId(value string) (int, error) {
 	if number, err := strconv.Atoi(value); err != nil {
-		message := " is not a valid id"
-		err = errors.New(value + message)
-		return 0, err
+		message := "%s is not a valid id"
+		message = util.Message(message, value)
+		return 0, errors.New(message)
 	} else {
 		return number, nil
 	}
-}
-
-func notFound(w http.ResponseWriter, r *http.Request, args ...string) {
-	err := errors.New(strings.Join(args, " "))
-	util.GetLogger(r).Error(err)
-	api.NotFoundErrorHandler(w, err)
 }
 
 func GetSystemEndpoints(w http.ResponseWriter, r *http.Request) {
@@ -47,41 +41,33 @@ func GetSystemEndpointById(w http.ResponseWriter, r *http.Request) {
 
 	id, err := isId(endpoint)
 	if err != nil {
-		util.GetLogger(r).Error(err)
-		api.RequestErrorHandler(w, err)
+		models.RequestErrorHandler(w, r, err.Error())
 		return
 	}
 
 	route, ok := registry.endpoints[id]
 	if !ok {
-		message := "no endpoint found with id "
-		notFound(w, r, message, endpoint)
+		message := "no endpoint found with id %v"
+		message = util.Message(message, id)
+		models.RequestErrorHandler(w, r, message)
 		return
 	}
 
 	var methods = make(JObject)
 	if ms, ok := registry.methods[route.methods]; ok {
 		for verb, m := range ms {
-			methods[verb] = struct {
-				Headers int `json:"headers,omitempty"`
-				Query   int `json:"query,omitempty"`
-			}{
-				m.headers,
-				m.query,
+			methods[verb] = models.GetSystemEndpointsMethod{
+				Query:   m.query,
+				Headers: m.headers,
 			}
 		}
 	}
 
-	json.NewEncoder(w).Encode(struct {
-		Path       string  `json:"path"`
-		UriParams  int     `json:"uriParams,omitempty"`
-		Methods    int     `json:"methods,omitempty"`
-		Configured JObject `json:"configured"`
-	}{
-		route.path,
-		route.uriParams,
-		route.methods,
-		methods,
+	json.NewEncoder(w).Encode(models.GetSystemEndpoints{
+		Path:       route.path,
+		UriParams:  route.uriParams,
+		Methods:    route.methods,
+		Configured: methods,
 	})
 }
 
@@ -91,45 +77,41 @@ func GetSystemMethod(w http.ResponseWriter, r *http.Request) {
 
 	id, err := isId(endpoint)
 	if err != nil {
-		util.GetLogger(r).Error(err)
-		api.RequestErrorHandler(w, err)
+		models.RequestErrorHandler(w, r, err.Error())
 		return
 	}
 
 	route, ok := registry.endpoints[id]
 	if !ok {
-		message := "no endpoint found with id "
-		notFound(w, r, message, endpoint)
+		message := "no endpoint found with id %s"
+		message = util.Message(message, endpoint)
+		models.NotFoundErrorHandler(w, r, message)
 		return
 	}
 
 	methods, ok := registry.methods[route.methods]
 	if !ok {
-		message := "no methods defined for "
-		notFound(w, r, message, route.path)
+		message := "no methods defined for %s"
+		message = util.Message(message, route.path)
+		models.NotFoundErrorHandler(w, r, message)
 		return
 	}
 
 	verb = strings.ToUpper(verb)
 	method, ok := methods[verb]
 	if !ok {
-		message := "not defined for " + route.path
-		notFound(w, r, "method", verb, message)
+		message := "not defined for %s"
+		message = util.Message(message, route.path)
+		models.NotFoundErrorHandler(w, r, message)
 		return
 	}
 
-	json.NewEncoder(w).Encode(struct {
-		Id      int    `json:"id"`
-		Method  string `json:"method"`
-		Uri     int    `json:"uriParams"`
-		Query   int    `json:"query"`
-		Headers int    `json:"headers"`
-	}{
-		method.id,
-		method.name,
-		route.uriParams,
-		method.query,
-		method.headers,
+	json.NewEncoder(w).Encode(models.GetSystemMethod{
+		Id:      method.id,
+		Method:  method.name,
+		Uri:     route.uriParams,
+		Query:   method.query,
+		Headers: method.headers,
 	})
 }
 
@@ -153,29 +135,24 @@ func GetSystemParameterById(w http.ResponseWriter, r *http.Request) {
 
 	id, err := isId(parameter)
 	if err != nil {
-		util.GetLogger(r).Error(err)
-		api.RequestErrorHandler(w, err)
+		models.RequestErrorHandler(w, r, err.Error())
 		return
 	}
 
 	params, ok := registry.parameters[id]
 	if !ok {
-		message := "no parameter group bears the id"
-		notFound(w, r, message, parameter)
+		message := "no parameter group bears the id %s"
+		message = util.Message(message, parameter)
+		models.NotFoundErrorHandler(w, r, message)
 		return
 	}
 
 	var display = make(map[string]any)
-	type props map[string]string
 	for name, p := range params {
-		display[name] = struct {
-			Type       string `json:"type"`
-			Required   bool   `json:"required"`
-			Properties props  `json:"properties,omitempty"`
-		}{
-			p.typ,
-			p.required,
-			registry.properties[p.properties],
+		display[name] = models.GetSystemParametersById{
+			Type:       p.typ,
+			Required:   p.required,
+			Properties: registry.properties[p.properties],
 		}
 	}
 
@@ -191,15 +168,114 @@ func GetSystemPropertyById(w http.ResponseWriter, r *http.Request) {
 
 	id, err := isId(property)
 	if err != nil {
-		util.GetLogger(r).Error(err)
-		api.RequestErrorHandler(w, err)
+		models.RequestErrorHandler(w, r, err.Error())
 		return
 	}
 
 	if properties, ok := registry.properties[id]; !ok {
-		message := "no property group possesses id"
-		notFound(w, r, message, property)
+		message := "no property group possesses id %s"
+		message = util.Message(message, property)
+		models.NotFoundErrorHandler(w, r, message)
 	} else {
 		json.NewEncoder(w).Encode(properties)
 	}
+}
+
+func PostSystemEndpoint(w http.ResponseWriter, r *http.Request) {
+	var db = util.Database
+	var endpoint string
+
+	json.NewDecoder(r.Body).Decode(&endpoint)
+
+	endpoint = strings.Trim(endpoint, " /")
+	endpoint = "/" + endpoint
+	if endpoint == "/" {
+		message := "endpoint path must be provided"
+		models.RequestErrorHandler(w, r, message)
+		return
+	}
+
+	for _, e := range registry.endpoints {
+		if e.path == endpoint {
+			message := "%s is already registered"
+			message = util.Message(message, e.path)
+			models.RequestErrorHandler(w, r, message)
+			return
+		}
+	}
+
+	var id int
+	sql := `INSERT INTO endpoint(path, "uriParams", methods)
+			VALUES ($1, 0, 0) RETURNING id`
+	_ = db.QueryRow(&id, sql, endpoint)
+
+	registry.endpoints[id] = _endpoint{
+		id,
+		endpoint,
+		0,
+		0,
+	}
+
+	message := "Successfully registered endpoint %s"
+	message = util.Message(message, endpoint)
+	models.SuccessfulSystemPost(w, r, message)
+}
+
+func PostSystemMethod(w http.ResponseWriter, r *http.Request) {
+	var db = util.Database
+
+	var method models.PostSystemMethodRequest
+	json.NewDecoder(r.Body).Decode(&method)
+
+	method.Name = chi.URLParam(r, "method")
+	method.Name = strings.ToUpper(method.Name)
+
+	endpoint := chi.URLParam(r, "endpoint")
+	id, err := strconv.Atoi(endpoint)
+	if err != nil {
+		message := "endpoint id (%s) must be a number"
+		message = util.Message(message, endpoint)
+		models.RequestErrorHandler(w, r, message)
+		return
+	}
+
+	e, ok := registry.endpoints[id]
+	if !ok {
+		message := "endpoint %s does not exist"
+		message = util.Message(message, endpoint)
+		models.RequestErrorHandler(w, r, message)
+		return
+	}
+
+	if _, ok = registry.methods[e.methods][method.Name]; ok {
+		message := "%s is already registered for %s"
+		message = util.Message(message, method.Name, e.path)
+		models.RequestErrorHandler(w, r, message)
+		return
+	}
+
+	if e.methods == 0 {
+		sql := `INSERT INTO method (id, name, headers, query) VALUES (DEFAULT, $1, $2, $3) RETURNING id`
+		_ = db.QueryRow(&e.methods, sql, method.Name, method.Headers, method.Query)
+
+		sql = `UPDATE endpoint SET methods = $1 WHERE id = $2`
+		_ = db.QueryRow(nil, sql, e.methods, e.id)
+
+		registry.endpoints[id] = e
+		registry.methods[e.methods] = make(map[string]_method)
+	} else {
+		sql := `INSERT INTO method (id, name, headers, query) VALUES ($1, $2, $3, $4)`
+		_ = db.QueryRow(nil, sql, e.methods, method.Name, method.Headers, method.Query)
+	}
+
+	registry.methods[e.methods][method.Name] = _method{
+		id:      e.methods,
+		name:    method.Name,
+		query:   method.Query,
+		headers: method.Headers,
+	}
+
+	message := "Successfully registered method %s for %s"
+	message = util.Message(message, method.Name, e.path)
+	models.SuccessfulSystemPost(w, r, message)
 }

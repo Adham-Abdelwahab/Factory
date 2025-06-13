@@ -8,20 +8,19 @@ import (
 	"strconv"
 	"strings"
 
-	"Factory/api"
 	"Factory/internal/util"
+	"Factory/models"
 
 	"github.com/go-chi/chi"
 )
 
-type entries map[string]string
+type entries map[string]map[string]string
 type resolver func(string) string
 
 func (e _endpoint) validationHandler(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if entries, err := e.validateRequest(r); err != nil {
-			util.GetLogger(r).Error(err)
-			api.RequestErrorHandler(w, err)
+			models.RequestErrorHandler(w, r, err.Error())
 		} else {
 			ctx := context.WithValue(r.Context(), "entries", entries)
 			next.ServeHTTP(w, r.WithContext(ctx))
@@ -38,26 +37,33 @@ func (e _endpoint) validateRequest(r *http.Request) (entries, error) {
 	}
 
 	var uriResolver = func(s string) string { return chi.URLParam(r, s) }
-	if err := entries.validateParameters(uriResolver, e.uriParams); err != nil {
+	if params, err := validateParameters(uriResolver, e.uriParams); err != nil {
 		return nil, withPrefix("uri parameters", err)
+	} else {
+		entries["uri"] = params
 	}
 
-	if err := entries.validateParameters(r.Header.Get, method.headers); err != nil {
+	if params, err := validateParameters(r.Header.Get, method.headers); err != nil {
 		return nil, withPrefix("headers", err)
+	} else {
+		entries["headers"] = params
 	}
 
-	if err := entries.validateParameters(r.URL.Query().Get, method.query); err != nil {
+	if params, err := validateParameters(r.URL.Query().Get, method.query); err != nil {
 		return nil, withPrefix("query parameters", err)
+	} else {
+		entries["query"] = params
 	}
 
 	return entries, nil
 }
 
-func (e entries) validateParameters(get resolver, params int) error {
+func validateParameters(get resolver, params int) (map[string]string, error) {
 	if params == 0 {
-		return nil
+		return nil, nil
 	}
 
+	var entries = make(map[string]string)
 	var missing []string
 	var issues []string
 
@@ -70,50 +76,51 @@ func (e entries) validateParameters(get resolver, params int) error {
 			if err := validate(p, v); err != nil {
 				issues = append(issues, err.Error())
 			} else {
-				e[name] = v
+				entries[name] = v
 			}
 		}
 	}
 
 	if len(missing) != 0 {
 		missing := strings.Join(missing, ", ")
-		return errors.New(missing + " must be provided")
+		return nil, errors.New(missing + " must be provided")
 	}
 
 	if len(issues) != 0 {
 		issues := strings.Join(issues, ". ")
-		return errors.New(issues)
+		return nil, errors.New(issues)
 	}
 
-	return nil
+	return entries, nil
 }
 
 func validate(p _parameter, v string) error {
 	var props = registry.properties[p.properties]
 
 	var conversion = func(s string) error {
-		prefix := " (" + p.name + ":" + v + ") "
-		m := "failed to convert" + prefix + "to " + s
-		return errors.New(m)
+		message := "failed to convert (%s:%s) to %s"
+		message = util.Message(message, p.name, v, s)
+		return errors.New(message)
 	}
 
 	if enum, ok := props["enum"]; ok {
 		values := strings.Split(enum, ",")
 		if !slices.Contains(values, v) {
-			prefix := p.name + " (" + v + ") "
-			suffix := "must be in (" + enum + ")"
-			return errors.New(prefix + suffix)
+			message := "%s (%s) must be in (%s)"
+			message = util.Message(message, p.name, v, enum)
+			return errors.New(message)
 		}
 	}
 
 	switch p.typ {
 
 	case "array":
-		if items, ok := props["items"]; !ok {
-			message := "array _property 'items' not defined for "
-			return errors.New(message + p.name)
-		} else {
+		if items, ok := props["items"]; ok {
 			p.typ = items
+		} else {
+			message := "array property 'items' not defined for %s"
+			message = util.Message(message, p.name)
+			return errors.New(message)
 		}
 
 		var issues []string

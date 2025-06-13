@@ -55,16 +55,20 @@ func scanner(structure any) []any {
 	return pointers
 }
 
-func (database *database) Query(statement string, args ...any) (pgx.Rows, error) {
-	return database.Conn.Query(database.Ctx, statement, args...)
+func (db *database) Query(sql string, args ...any) (pgx.Rows, error) {
+	return db.Conn.Query(db.Ctx, sql, args...)
 }
 
-func (database *database) ForEach(rows pgx.Rows, scan any, method func() error) error {
+func (*database) ForEach(rows pgx.Rows, scan any, method func() error) error {
 	_, err := pgx.ForEachRow(rows, scanner(scan), method)
 	return err
 }
 
-func (database *database) Close() {
-	database.Ctx.Done()
-	database.Conn.Close()
+func (db *database) QueryRow(row any, sql string, args ...any) error {
+	return db.Conn.QueryRow(db.Ctx, sql, args...).Scan(row)
+}
+
+func (db *database) Close() {
+	db.Ctx.Done()
+	db.Conn.Close()
 }

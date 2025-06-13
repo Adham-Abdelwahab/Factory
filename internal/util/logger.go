@@ -2,10 +2,15 @@ package util
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 
 	"github.com/sirupsen/logrus"
 )
+
+func Message(format string, args ...any) string {
+	return fmt.Sprintf(format, args...)
+}
 
 func GetLogger(r *http.Request) *logrus.Entry {
 	return r.Context().Value("logger").(*logrus.Entry)
